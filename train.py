@@ -8,6 +8,7 @@ from datetime import datetime
 from diffusers import DDPMScheduler
 
 from models import FlatLatentDiffuser, sample_latent, train_step
+from load_emb import load_patient_gene_embeddings
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from datetime import datetime
@@ -123,17 +124,39 @@ def generate_mock_data(num_samples=100, patient_dim=128, gene_dim=256):
 if __name__ == "__main__":
     # Hyperparameters
     BATCH_SIZE = 32
-    EPOCHS = 500
-    LEARNING_RATE = 1e-4
+    EPOCHS = 300
+    LEARNING_RATE = 1e-5
+    HIDDEN_DIM = 512
+    TIME_DIM = 256
+    TRAIN_DATA_PATH = "embs/patients_train.pt"
+    VAL_DATA_PATH = "embs/patients_test.pt"
     
     patient_embs = None  # Load or generate patient embeddings here
     gene_embs = None     # Load or generate gene embeddings here
 
-    patient_embs, gene_embs = generate_mock_data(
-        num_samples=100, 
-        patient_dim=256, 
-        gene_dim=256
+    # patient_embs, gene_embs = generate_mock_data(
+    #     num_samples=10000, 
+    #     patient_dim=128, 
+    #     gene_dim=128
+    # )
+
+    # patient_embs_val, gene_embs_val = generate_mock_data(
+    #     num_samples=1000, 
+    #     patient_dim=128, 
+    #     gene_dim=128
+    # )
+    
+
+    patient_embs, gene_embs = load_patient_gene_embeddings(
+        path=TRAIN_DATA_PATH,
+        device=device
     )
+
+    patient_embs_val, gene_embs_val = load_patient_gene_embeddings(
+        path=VAL_DATA_PATH,
+        device=device
+    )
+
 
     patient_dim = patient_embs.shape[1]
     gene_dim = gene_embs.shape[1]
@@ -143,8 +166,8 @@ if __name__ == "__main__":
     model = FlatLatentDiffuser(
         z_dim=patient_dim,
         cond_dim=gene_dim,
-        hidden_dim=512,
-        time_dim=512
+        hidden_dim=HIDDEN_DIM,
+        time_dim=TIME_DIM
     ).to(device)
     
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
@@ -164,7 +187,7 @@ if __name__ == "__main__":
 
     
     # Generate samples for testing
-    test_gene_embs = gene_embs[:10]
+    test_gene_embs = gene_embs_val[:]
     generated_patients = generate_patients(
         model, 
         scheduler, 
@@ -177,7 +200,7 @@ if __name__ == "__main__":
     print(f"Expected shape: torch.Size([{len(test_gene_embs)}, {patient_dim}])")
 
     # Compare with ground truth
-    ground_truth = patient_embs[:10].to(device)
+    ground_truth = patient_embs_val[:].to(device)
     mse = F.mse_loss(generated_patients, ground_truth)
     cosine_sim = F.cosine_similarity(generated_patients, ground_truth, dim=-1).mean()
 

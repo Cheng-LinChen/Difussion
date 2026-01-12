@@ -7,8 +7,6 @@ from diffusers import DDPMScheduler
 
 device = "cuda"
 
-patient_dim = 128
-gene_dim = 64
 LATENT_SCALE = 0.18215  # from LDM / Stable Diffusion
 
 # Positional Encoding for time steps
@@ -44,7 +42,7 @@ class FiLMLayer(nn.Module):
 
 
 class FlatLatentDiffuser(nn.Module):
-    def __init__(self, z_dim, cond_dim, hidden_dim=512, time_dim=512):
+    def __init__(self, z_dim, cond_dim, hidden_dim=1024, time_dim=1024):
         super().__init__()
         self.time_embed = SinusoidalTimeEmbedding(time_dim)
         self.time_mlp = nn.Sequential(
@@ -61,9 +59,11 @@ class FlatLatentDiffuser(nn.Module):
             nn.ModuleDict({
                 'norm': nn.LayerNorm(hidden_dim),
                 'mlp': nn.Sequential(
-                    nn.Linear(hidden_dim, hidden_dim),
+                    nn.Linear(hidden_dim, hidden_dim*3),
                     nn.GELU(),
-                    nn.Linear(hidden_dim, hidden_dim),
+                    nn.Linear(hidden_dim*3, hidden_dim*2),
+                    nn.GELU(),
+                    nn.Linear(hidden_dim*2, hidden_dim),
                 ),
                 'film': FiLMLayer(hidden_dim, hidden_dim) # cond_dim -> hidden_dim by cond_proj(cond)
             })
